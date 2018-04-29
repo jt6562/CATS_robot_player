@@ -8,7 +8,11 @@ import numpy as np
 import aircv as ac
 from functools import partial
 from time import sleep, time
-from config import adb_path
+from config import adb_path, interval_check_ad_movie
+import logging
+
+logger = logging.getLogger('rules')
+
 
 # Postion
 back_btn = (80, 714)
@@ -36,31 +40,37 @@ def click_back():
     system(adb_path + " shell input keyevent 4")
 
 
-def common_rule(screen, templates, name, threshold=0.99):
+def common_rule(screen, templates, name, threshold=0.8, target=None, wait_time=1):
     global ad_movie_flag, no_movie_time
-    # print 'ad_movie_flag', ad_movie_flag, name
     if name in ['normal_box', 'super_box'] and not ad_movie_flag:
-        if time() - no_movie_time > 600:
-            print 'Reset', ad_movie_flag
+        if time() - no_movie_time > interval_check_ad_movie:
             ad_movie_flag = True
+            logger.info('Reset ab_movie_flag to %s' % ad_movie_flag)
         return False
 
     template = templates[name]
 
     result = ac.find_template(screen, template, threshold=threshold)
+    print name, result
     if not result:
         return False
 
-    print "Detected: %s, Click:%s" % (name, result['result'])
-    click(result['result'])
+    click_position = result['result']
+    if target:
+        click_position = target
+
+    logger.info("Detected: %s, Click:%s" % (name, result['result']))
+    click(click_position)
+
+    sleep(wait_time)
 
     return True
 
 
 def play_ad(screen, templates):
-    if common_rule(screen, templates, 'play_ad'):
+    if common_rule(screen, templates, 'play_ad', threshold=0.9):
         ad_movie_flag = True
-        print 'Playing ad movie for 35s'
+        logger.info('Playing ad movie for 35s')
         sleep(35)
         click_back()
         return True
@@ -81,7 +91,7 @@ def no_play_ad(screen, templates):
     if not result:
         return False
 
-    print "Unlock box, but no ad movie to play, quit"
+    logger.warn("Unlock box, but no ad movie to play, quit")
     global ad_movie_flag, no_movie_time
     ad_movie_flag = False
     no_movie_time = time()
@@ -92,20 +102,23 @@ def no_play_ad(screen, templates):
 def idle_click(screen, templates):
     # click_back()
     click(next_click)
+    sleep(2)
 
 
 unlock_box = partial(common_rule, name='unlock_box')
-normal_box = partial(common_rule, name='normal_box')
-super_box = partial(common_rule, name='super_box')
-fight = partial(common_rule, name='fight')
-quick_fight_start = partial(common_rule, name='quick_fight_start')
+normal_box = partial(common_rule, name='normal_box', threshold=0.97)
+super_box = partial(common_rule, name='super_box', threshold=0.90)
+fight = partial(common_rule, name='fight', wait_time=1)
+quick_fight_start = partial(common_rule, name='quick_fight_start', wait_time=12)
 ok = partial(common_rule, name='ok', threshold=0.9)
 # fight_ok = partial(common_rule, name='fight_ok')
 get = partial(common_rule, name='get')
 collect_award = partial(common_rule, name='collect_award')
+championship_fight = partial(common_rule, name='championship_fight', threshold=0.99,
+                             target=back_btn)
 
 rules = [
-    unlock_box, play_ad, no_play_ad, ok, normal_box, super_box, fight,
+    championship_fight, unlock_box, play_ad, no_play_ad, ok, normal_box, super_box, fight,
     quick_fight_start, get, collect_award, idle_click
 ]
 

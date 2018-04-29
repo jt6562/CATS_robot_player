@@ -3,9 +3,27 @@
 
 from os.path import walk, join, splitext
 import sys
-from os import system
+from os import system, remove
 import cv2
-from rules import run_rules, adb_path
+from rules import run_rules
+from config import adb_path
+import logging
+from subprocess import call
+from time import sleep
+from tempfile import mktemp
+import atexit
+
+temp_screencap = mktemp('.png')
+
+logger = logging.getLogger('main')
+logger.info("Output screen capture temporary %s" % temp_screencap)
+
+
+def remove_tempfile():
+    remove(temp_screencap)
+
+
+atexit.register(remove_tempfile)
 
 
 def load_all_templates():
@@ -22,10 +40,18 @@ def load_all_templates():
 
 
 def load_screen():
-    output = 'tmp_screen.png'
-    cmd = ' '.join([adb_path, 'shell', 'screencap', '-p', '>', output])
-    system(cmd)
-    img_rgb = cv2.imread(join(sys.path[0], output))
+    # cmd = [adb_path, 'shell', 'screencap', '-p', '/sdcard/' + output]
+    # call(cmd, stdout=None)
+    # cmd = [adb_path, 'pull', '/sdcard/' + output, '.']
+    # call(cmd, stdout=None)
+    # cmd = [adb_path, 'shell', 'rm', '/sdcard/' + output]
+    # call(cmd)
+
+    cmd = [adb_path, 'shell', 'screencap', '-p', '>', temp_screencap]
+    print ' '.join(cmd)
+    system(' '.join(cmd))
+    img_rgb = cv2.imread(temp_screencap)
+    # img_rgb = cv2.imread(join(sys.path[0], temp_screencap))
     return img_rgb
 
 
